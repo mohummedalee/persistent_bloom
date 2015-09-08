@@ -18,7 +18,9 @@ The environment variables you can change to configure this script are:
 Usage: The two web services provided are:
 - `exists/haystackID,pin`
 - `add/haystackID,pin`
+
 Can easily be called like `http://localhost:8888/add/55488b38f405c70300efceb2,powpow`
+
 The API will maintain the log in a file called `bloom.log`.
 
 Things configurable through environment variables:
