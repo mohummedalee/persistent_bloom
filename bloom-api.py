@@ -43,7 +43,6 @@ class BloomExists(tornado.web.RequestHandler):
             self.write(json.dumps(response))
             self.finish()
         else:
-            #print 'Received: Haystack:', haystack, ', Pin:', pin
             response['completed'] = 1
             response['description'] = 'Completed'
 
