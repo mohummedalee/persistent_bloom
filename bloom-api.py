@@ -94,32 +94,50 @@ class BloomAdd(tornado.web.RequestHandler):
             response['completed'] = 1
             response['description'] = "Completed"
 
-            # Pull out the bloom filter
-            try:
-                result = db.bloom.find_one({'_id': ObjectId(haystack)})
-            except:
-                response['completed'] = 0
-                response['description'] = "Couldn't connect to database"
-                logger.error('ADD - Haystack:' + haystack + ' - Pin:' + pin + ' - Msg:DB down')
-                self.write(json.dumps(response))
-                self.finish()
-                return
+            # Implementing the update-if-current pattern
+            # Just don't ask right now why I'm doing this
+            while True:
+                # Pull out the bloom filter
+                try:
+                    result = db.bloom.find_one({'_id': ObjectId(haystack)})
+                except:
+                    response['completed'] = 0
+                    response['description'] = "Couldn't connect to database"
+                    logger.error('ADD - Haystack:' + haystack + ' - Pin:' + pin + ' - Msg:DB down')
+                    self.write(json.dumps(response))
+                    self.finish()
+                    return
 
-            # Add the PinID
-            if result is not None:
-                bf = Bloom.BloomSerializer.deserialize(result)
-                bf.add(pin)
-                serialized = Bloom.BloomSerializer.serialize(bf)
-                serialized['_id'] = ObjectId(haystack)
-                db.bloom.save(serialized)
-                logger.info('ADD - Haystack:' + haystack + ' - Pin:' + pin + ' - Msg:' + str(serialized['count']))
-            else:
-                bf = Bloom.Bloom(new_filter_capacity)
-                bf.add(pin)
-                serialized = Bloom.BloomSerializer.serialize(bf)
-                serialized['_id'] = ObjectId(haystack)
-                db.bloom.save(serialized)
-                logger.info('ADD - Haystack:' + haystack + ' - Pin:' + pin + ' - Msg:New document')
+                # Add the PinID
+                if result is not None:
+                    bf = Bloom.BloomSerializer.deserialize(result)
+                    bf.add(pin)
+                    to_update = {'$inc':
+                                        {'count': 1 },
+                                    '$set':
+                                        {'bitarray': bf['bitarray']},
+                                    }
+                    # Mentioning old count makes you only access the older filter
+                    entry = {'_id': ObjectId(haystack), 'count': bf['count']}
+
+                    # Perform update operation
+                    updated = db.bloom.find_one_and_update(entry, to_update, return_document = ReturnDocument.AFTER)
+                    if updated is not None:
+                        logger.info('ADD - Haystack:' + haystack + ' - Pin:' + pin + ' - Msg:' + str(updated['count']))
+                        break
+                    else:
+                        logger.info('ADD - Haystack:' + haystack + ' - Pin:' + pin + ' - Msg:Concurrency issue, trying again')
+                        pass
+                        # Try fetching and updating again, hence the infinite loop
+                else:
+                    # The filter never existed in the first place
+                    bf = Bloom.Bloom(new_filter_capacity)
+                    bf.add(pin)
+                    serialized = Bloom.BloomSerializer.serialize(bf)
+                    serialized['_id'] = ObjectId(haystack)
+                    db.bloom.save(serialized)
+                    logger.info('ADD - Haystack:' + haystack + ' - Pin:' + pin + ' - Msg:New document')
+                    break
 
             self.write(json.dumps(response))
             self.finish()
