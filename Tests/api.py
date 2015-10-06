@@ -42,6 +42,7 @@ class APITests(unittest.TestCase):
 
         # Deserialize the bloom filter and check if it has the pin
         fetched = db.bloom.find_one({'_id': ObjectId(self.haystack)})
+        self.assertTrue(fetched is not None)
         bf = Bloom.BloomSerializer.deserialize(fetched)
         self.assertTrue(self.pin in bf)
 
