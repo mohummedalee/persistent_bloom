@@ -5,8 +5,9 @@ import tornado.web
 import tornado.httpserver
 import json
 from Bloom import Bloom
-from pymongo import MongoClient, errors
+from pymongo import MongoClient, errors, ReturnDocument
 from bson.objectid import ObjectId
+from bson.binary import Binary
 import logging
 
 # MongoDB connection settings
@@ -111,17 +112,19 @@ class BloomAdd(tornado.web.RequestHandler):
                 # Add the PinID
                 if result is not None:
                     bf = Bloom.BloomSerializer.deserialize(result)
+                    oldcount = bf.count
                     bf.add(pin)
-                    to_update = {'$inc':
-                                        {'count': 1 },
-                                    '$set':
-                                        {'bitarray': bf['bitarray']},
-                                    }
                     # Mentioning old count makes you only access the older filter
-                    entry = {'_id': ObjectId(haystack), 'count': bf['count']}
+                    entry = {'_id': ObjectId(haystack), 'count': oldcount}
+                    to_update = {'$set':
+                                        {
+                                        'bitarray': Binary(bf.bitarray.tobytes()),
+                                        'count': bf.count
+                                        }
+                                }
 
-                    # Perform update operation
-                    updated = db.bloom.find_one_and_update(entry, to_update, return_document = ReturnDocument.AFTER)
+                    # Perform the update
+                    updated = db.bloom.find_one_and_update(entry, to_update, return_document=ReturnDocument.AFTER)
                     if updated is not None:
                         logger.info('ADD - Haystack:' + haystack + ' - Pin:' + pin + ' - Msg:' + str(updated['count']))
                         break
@@ -159,7 +162,7 @@ if __name__ == '__main__':
     formatter = logging.Formatter('%(levelname)s - %(asctime)s - %(message)s')
     log_file = 'bloom.log'
     log_fh = logging.FileHandler(log_file)
-    log_fh.setLevel(logging.INFO)
+    log_fh.setLevel(logging.DEBUG)
     log_fh.setFormatter(formatter)
     # Have to log to the file
     logger.addHandler(log_fh)
