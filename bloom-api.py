@@ -4,6 +4,7 @@ import tornado.ioloop
 import tornado.web
 import tornado.httpserver
 import json
+from time import sleep
 from Bloom import Bloom
 from pymongo import MongoClient, errors, ReturnDocument
 from bson.objectid import ObjectId
@@ -130,8 +131,9 @@ class BloomAdd(tornado.web.RequestHandler):
                         break
                     else:
                         logger.info('ADD - Haystack:' + haystack + ' - Pin:' + pin + ' - Msg:Concurrency issue, trying again')
+                        # Try fetching and updating again after delay, hence the infinite loop
+                        sleep(1)
                         pass
-                        # Try fetching and updating again, hence the infinite loop
                 else:
                     # The filter never existed in the first place
                     bf = Bloom.Bloom(new_filter_capacity)
